@@ -1,9 +1,9 @@
 import streamlit as st
 import json
 
-st.set_page_config(page_title="NFL Pick'em Model", layout="wide")
+st.set_page_config(page_title="Coffee Can Winner Model", layout="wide")
 
-st.title("NFL Point Spread Pick'em Model")
+st.title("Coffee Can Winner Model")
 
 # Load baseline Elo ratings from teams_elo.json
 try:

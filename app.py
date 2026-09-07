@@ -34,20 +34,37 @@ with st.form("matchup_form"):
                                    help="Coaching upgrades, rest advantage, etc.")
 
     st.divider()
+    
+    st.subheader("Vegas Betting Market")
     col3, col4 = st.columns(2)
+    
     with col3:
-        vegas_line = st.number_input("Vegas Line (Home Team Spread)", value=2.5, step=0.5, 
-                                     help="Enter 2.5 if Away is favored by 2.5 (e.g., Giants +2.5)")
+        # User explicitly selects the favorite
+        favored_team = st.selectbox("Vegas Favored Team", [away_team, home_team])
     with col4:
-        hfa_points = st.number_input("Home Field Advantage (Points)", value=1.5, step=0.5)
+        # Enter a positive spread number (e.g., 3.5 for 3.5-point favorite)
+        raw_spread = st.number_input("Vegas Spread (Points)", value=2.5, min_value=0.0, step=0.5,
+                                     help="Enter a positive number. E.g., if Ravens are favored by 3.5, select Ravens above and enter 3.5 here.")
 
+    hfa_points = st.number_input("Home Field Advantage (Points)", value=1.5, step=0.5)
     is_divisional = st.checkbox("Divisional Matchup (+1.5 pt ATS boost to Underdog)", value=True)
+    
     submit_button = st.form_submit_button("Run Analysis")
 
 if submit_button:
+    # Convert Vegas selection into standard Home Perspective Spread
+    # If Home is favored, home_vegas_spread is negative (e.g., -3.5)
+    # If Away is favored, home_vegas_spread is positive (e.g., +3.5)
+    if favored_team == home_team:
+        home_vegas_spread = -raw_spread
+    else:
+        home_vegas_spread = raw_spread
+
+    # 1. Base Elo Difference (Home - Away)
     elo_diff = home_elo - away_elo
-    base_spread = elo_diff / 25.0  # Negative means Away is favored
+    base_spread = elo_diff / 25.0  # Negative means Away is favored by raw Elo
     
+    # 2. Divisional Underdog Boost
     ats_adj = 0.0
     if is_divisional:
         if base_spread < 0:
@@ -55,23 +72,39 @@ if submit_button:
         else:
             ats_adj -= 1.5  # Boost Away Team
 
-    # Projected Line from Home Perspective
+    # 3. Model Projected Line (from Home Perspective)
     projected_line = base_spread + hfa_points + home_adj - away_adj + ats_adj
-    edge = projected_line - vegas_line
+    
+    # Edge Calculation
+    edge = projected_line - home_vegas_spread
 
     st.divider()
     st.header("📊 Model Analysis")
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Elo Difference", f"{elo_diff:+d} Elo")
-    c2.metric("Model Projected Spread", f"{home_team} {projected_line:+.2f}")
-    c3.metric("Vegas Line", f"{home_team} {vegas_line:+.1f}")
+    
+    # Display human-readable projected spread
+    if projected_line < 0:
+        proj_str = f"{home_team} {projected_line:+.2f}"
+    else:
+        proj_str = f"{away_team} {-projected_line:+.2f}"
+    c2.metric("Model Projected Spread", proj_str)
+    
+    # Display human-readable Vegas line
+    if home_vegas_spread < 0:
+        vegas_str = f"{home_team} {home_vegas_spread:+.1f}"
+    else:
+        vegas_str = f"{away_team} {-home_vegas_spread:+.1f}"
+    c3.metric("Vegas Line", vegas_str)
 
     st.subheader("Pick Recommendation")
     if abs(edge) >= 1.5:
         if edge > 0:
-            st.success(f"**RECOMMENDED PICK:** **{home_team} ({vegas_line:+.1f})** | Edge: **{abs(edge):.2f} pts**")
+            # Value is on the Home Team
+            st.success(f"**RECOMMENDED PICK:** **{home_team} ({home_vegas_spread:+.1f})** | Model Edge: **{abs(edge):.2f} pts**")
         else:
-            st.success(f"**RECOMMENDED PICK:** **{away_team} ({-vegas_line:+.1f})** | Edge: **{abs(edge):.2f} pts**")
+            # Value is on the Away Team
+            st.success(f"**RECOMMENDED PICK:** **{away_team} ({-home_vegas_spread:+.1f})** | Model Edge: **{abs(edge):.2f} pts**")
     else:
         st.warning(f"**NO ACTIONABLE EDGE:** Model line matches Vegas within 1.5 pts threshold. Edge: **{abs(edge):.2f} pts**")
